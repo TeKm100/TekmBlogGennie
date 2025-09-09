@@ -45,7 +45,7 @@ function App() {
         <div className="text-center mb-12">
           <div className="flex items-center justify-center gap-4 mb-4">
             <img 
-              src="https://i.imgur.com/YourImageID.png" 
+              src="/Logo.jpg" 
               alt="TekmBlogGenie Logo" 
               className="w-12 h-12 md:w-16 md:h-16 rounded-full shadow-lg"
             />
@@ -133,7 +133,7 @@ function App() {
 
         {/* Footer */}
         <footer className="text-center mt-12">
-          <p className="text-gray-500 text-sm">Built with Lumi</p>
+          <p className="text-gray-500 text-sm"></p>
         </footer>
       </div>
     </div>

@@ -1,329 +1,294 @@
 
-import React, { useState } from 'react'
-import {X, Eye, EyeOff, Mail, Lock, User, Globe} from 'lucide-react'
-import { useAuth } from '../hooks/useAuth'
-import toast from 'react-hot-toast'
+import React, { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import {X, Eye, EyeOff, Mail, Lock, User, Globe} from 'lucide-react';
+import { useAuth } from '../hooks/useAuth';
+import LoadingSpinner from './LoadingSpinner';
+import toast from 'react-hot-toast';
 
 interface AuthModalProps {
-  isOpen: boolean
-  onClose: () => void
-  initialMode?: 'login' | 'signup' | 'forgot'
-}
-
-const countries = [
-  { code: 'US', name: 'United States', currency: 'USD' },
-  { code: 'NG', name: 'Nigeria', currency: 'NGN' },
-  { code: 'GH', name: 'Ghana', currency: 'GHS' },
-  { code: 'KE', name: 'Kenya', currency: 'KES' },
-  { code: 'ZA', name: 'South Africa', currency: 'ZAR' },
-  { code: 'GB', name: 'United Kingdom', currency: 'GBP' },
-  { code: 'CA', name: 'Canada', currency: 'CAD' },
-  { code: 'AU', name: 'Australia', currency: 'AUD' }
-]
-
-interface FormData {
-  fullName?: string
-  email: string
-  password: string
-  country?: string
-  rememberMe?: boolean
+  isOpen: boolean;
+  onClose: () => void;
+  initialMode?: 'login' | 'signup';
 }
 
 const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 'login' }) => {
-  const [mode, setMode] = useState<'login' | 'signup' | 'forgot'>(initialMode)
-  const [showPassword, setShowPassword] = useState(false)
-  const [loading, setLoading] = useState(false)
-  const [formData, setFormData] = useState<FormData>({
-    fullName: '',
+  const [mode, setMode] = useState<'login' | 'signup' | 'forgot'>(initialMode);
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
+  
+  const [formData, setFormData] = useState({
     email: '',
     password: '',
+    fullName: '',
     country: '',
-    rememberMe: false
-  })
-  const [errors, setErrors] = useState<Partial<FormData>>({})
-  
-  const { signIn } = useAuth()
+    confirmPassword: ''
+  });
 
-  const validateForm = (): boolean => {
-    const newErrors: Partial<FormData> = {}
+  const { login, signup, resetPassword } = useAuth();
 
-    // Email validation
-    if (!formData.email) {
-      newErrors.email = 'Email is required'
-    } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
-      newErrors.email = 'Please enter a valid email address'
-    }
-
-    // Password validation
-    if (!formData.password) {
-      newErrors.password = 'Password is required'
-    } else if (mode === 'signup') {
-      if (formData.password.length < 8) {
-        newErrors.password = 'Password must be at least 8 characters'
-      } else if (!/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/.test(formData.password)) {
-        newErrors.password = 'Password must contain uppercase, lowercase, number, and special character'
-      }
-    }
-
-    // Signup specific validation
-    if (mode === 'signup') {
-      if (!formData.fullName || formData.fullName.length < 2) {
-        newErrors.fullName = 'Full name must be at least 2 characters'
-      }
-      if (!formData.country) {
-        newErrors.country = 'Please select your country'
-      }
-    }
-
-    setErrors(newErrors)
-    return Object.keys(newErrors).length === 0
-  }
-
-  const handleInputChange = (field: keyof FormData, value: string | boolean) => {
-    setFormData(prev => ({ ...prev, [field]: value }))
-    // Clear error when user starts typing
-    if (errors[field]) {
-      setErrors(prev => ({ ...prev, [field]: undefined }))
-    }
-  }
+  const countries = [
+    'United States', 'United Kingdom', 'Canada', 'Australia', 'Germany', 'France',
+    'Nigeria', 'Ghana', 'Kenya', 'South Africa', 'India', 'Japan', 'Brazil'
+  ];
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    
-    if (!validateForm()) return
+    e.preventDefault();
+    setLoading(true);
 
-    setLoading(true)
     try {
-      if (mode === 'signup') {
-        // In a real app, you'd create the user account here
-        await signIn()
-        toast.success('Account created successfully!')
-      } else if (mode === 'login') {
-        await signIn()
-        toast.success('Welcome back!')
+      if (mode === 'login') {
+        await login(formData.email, formData.password, rememberMe);
+        toast.success('Welcome back!');
+        onClose();
+      } else if (mode === 'signup') {
+        if (formData.password !== formData.confirmPassword) {
+          toast.error('Passwords do not match');
+          return;
+        }
+        if (formData.password.length < 6) {
+          toast.error('Password must be at least 6 characters');
+          return;
+        }
+        await signup(formData.email, formData.password, formData.fullName, formData.country);
+        toast.success('Account created successfully!');
+        onClose();
       } else if (mode === 'forgot') {
-        // In a real app, you'd send a password reset email here
-        toast.success('Password reset email sent! Check your inbox.')
-        setMode('login')
-        return
+        await resetPassword(formData.email);
+        toast.success('Password reset email sent!');
+        setMode('login');
       }
-      onClose()
-    } catch (error) {
-      if (mode === 'signup') {
-        toast.error('Failed to create account. Please try again.')
-      } else {
-        toast.error('Invalid email or password. Please try again.')
-      }
+    } catch (error: any) {
+      toast.error(error.message || 'An error occurred');
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
-  if (!isOpen) return null
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    setFormData(prev => ({
+      ...prev,
+      [e.target.name]: e.target.value
+    }));
+  };
+
+  if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-gray-800 rounded-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
-          <h2 className="text-2xl font-bold text-gray-800 dark:text-white">
-            {mode === 'login' && 'Welcome Back'}
-            {mode === 'signup' && 'Create Account'}
-            {mode === 'forgot' && 'Reset Password'}
-          </h2>
-          <button
-            onClick={onClose}
-            className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-          >
-            <X className="w-6 h-6" />
-          </button>
-        </div>
+    <AnimatePresence>
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.9 }}
+          className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md"
+        >
+          <div className="flex justify-between items-center p-6 border-b dark:border-gray-700">
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+              {mode === 'login' ? 'Sign In' : mode === 'signup' ? 'Create Account' : 'Reset Password'}
+            </h2>
+            <button
+              onClick={onClose}
+              className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
+            >
+              <X className="w-5 h-5 text-gray-500" />
+            </button>
+          </div>
 
-        <div className="p-6">
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Full Name - Signup only */}
+          <form onSubmit={handleSubmit} className="p-6 space-y-4">
             {mode === 'signup' && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Full Name
-                </label>
-                <div className="relative">
-                  <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                  <input
-                    type="text"
-                    value={formData.fullName || ''}
-                    onChange={(e) => handleInputChange('fullName', e.target.value)}
-                    className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
-                    placeholder="Enter your full name"
-                  />
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Full Name
+                  </label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <input
+                      type="text"
+                      name="fullName"
+                      value={formData.fullName}
+                      onChange={handleInputChange}
+                      required
+                      className="w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                      placeholder="Enter your full name"
+                    />
+                  </div>
                 </div>
-                {errors.fullName && (
-                  <p className="text-red-500 text-sm mt-1">{errors.fullName}</p>
-                )}
-              </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Country
+                  </label>
+                  <div className="relative">
+                    <Globe className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <select
+                      name="country"
+                      value={formData.country}
+                      onChange={handleInputChange}
+                      required
+                      className="w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                    >
+                      <option value="">Select your country</option>
+                      {countries.map(country => (
+                        <option key={country} value={country}>{country}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </>
             )}
 
-            {/* Email */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Email Address
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Email
               </label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
                 <input
                   type="email"
+                  name="email"
                   value={formData.email}
-                  onChange={(e) => handleInputChange('email', e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+                  onChange={handleInputChange}
+                  required
+                  className="w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
                   placeholder="Enter your email"
                 />
               </div>
-              {errors.email && (
-                <p className="text-red-500 text-sm mt-1">{errors.email}</p>
-              )}
             </div>
 
-            {/* Password - Not for forgot mode */}
             {mode !== 'forgot' && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Password
-                </label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    value={formData.password}
-                    onChange={(e) => handleInputChange('password', e.target.value)}
-                    className="w-full pl-10 pr-12 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
-                    placeholder={mode === 'signup' ? 'Create a strong password' : 'Enter your password'}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                  >
-                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                  </button>
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Password
+                  </label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      name="password"
+                      value={formData.password}
+                      onChange={handleInputChange}
+                      required
+                      className="w-full pl-10 pr-10 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                      placeholder="Enter your password"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 transform -translate-y-1/2"
+                    >
+                      {showPassword ? (
+                        <EyeOff className="w-5 h-5 text-gray-400" />
+                      ) : (
+                        <Eye className="w-5 h-5 text-gray-400" />
+                      )}
+                    </button>
+                  </div>
                 </div>
-                {errors.password && (
-                  <p className="text-red-500 text-sm mt-1">{errors.password}</p>
+
+                {mode === 'signup' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Confirm Password
+                    </label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                      <input
+                        type="password"
+                        name="confirmPassword"
+                        value={formData.confirmPassword}
+                        onChange={handleInputChange}
+                        required
+                        className="w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                        placeholder="Confirm your password"
+                      />
+                    </div>
+                  </div>
                 )}
-              </div>
-            )}
 
-            {/* Country - Signup only */}
-            {mode === 'signup' && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Country
-                </label>
-                <div className="relative">
-                  <Globe className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                  <select
-                    value={formData.country || ''}
-                    onChange={(e) => handleInputChange('country', e.target.value)}
-                    className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent dark:bg-gray-700 dark:text-white appearance-none"
-                  >
-                    <option value="">Select your country</option>
-                    {countries.map((country) => (
-                      <option key={country.code} value={country.code}>
-                        {country.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                {errors.country && (
-                  <p className="text-red-500 text-sm mt-1">{errors.country}</p>
+                {mode === 'login' && (
+                  <div className="flex items-center justify-between">
+                    <label className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={rememberMe}
+                        onChange={(e) => setRememberMe(e.target.checked)}
+                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
+                        Remember me
+                      </span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setMode('forgot')}
+                      className="text-sm text-blue-600 hover:text-blue-500"
+                    >
+                      Forgot password?
+                    </button>
+                  </div>
                 )}
-              </div>
+              </>
             )}
 
-            {/* Remember Me - Login only */}
-            {mode === 'login' && (
-              <div className="flex items-center justify-between">
-                <label className="flex items-center">
-                  <input
-                    type="checkbox"
-                    checked={formData.rememberMe || false}
-                    onChange={(e) => handleInputChange('rememberMe', e.target.checked)}
-                    className="rounded border-gray-300 text-purple-600 focus:ring-purple-500"
-                  />
-                  <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">Remember me</span>
-                </label>
-                <button
-                  type="button"
-                  onClick={() => setMode('forgot')}
-                  className="text-sm text-purple-600 hover:text-purple-700"
-                >
-                  Forgot password?
-                </button>
-              </div>
-            )}
-
-            {/* Forgot Password Info */}
-            {mode === 'forgot' && (
-              <p className="text-gray-600 dark:text-gray-400 mb-4">
-                Enter your email address and we'll send you a link to reset your password.
-              </p>
-            )}
-
-            {/* Submit Button */}
-            <button
+            <motion.button
               type="submit"
               disabled={loading}
-              className="w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white py-3 rounded-lg font-semibold hover:from-purple-700 hover:to-blue-700 transition-all duration-200 disabled:opacity-50"
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white py-2 px-4 rounded-md font-medium transition-colors flex items-center justify-center"
             >
               {loading ? (
-                mode === 'signup' ? 'Creating Account...' : 
-                mode === 'login' ? 'Signing In...' : 'Sending...'
+                <LoadingSpinner size="sm" />
               ) : (
-                mode === 'signup' ? 'Create Account' : 
-                mode === 'login' ? 'Sign In' : 'Send Reset Link'
+                mode === 'login' ? 'Sign In' : mode === 'signup' ? 'Create Account' : 'Send Reset Email'
               )}
-            </button>
+            </motion.button>
+
+            <div className="text-center">
+              {mode === 'login' ? (
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  Don't have an account?{' '}
+                  <button
+                    type="button"
+                    onClick={() => setMode('signup')}
+                    className="text-blue-600 hover:text-blue-500 font-medium"
+                  >
+                    Sign up
+                  </button>
+                </p>
+              ) : mode === 'signup' ? (
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  Already have an account?{' '}
+                  <button
+                    type="button"
+                    onClick={() => setMode('login')}
+                    className="text-blue-600 hover:text-blue-500 font-medium"
+                  >
+                    Sign in
+                  </button>
+                </p>
+              ) : (
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  Remember your password?{' '}
+                  <button
+                    type="button"
+                    onClick={() => setMode('login')}
+                    className="text-blue-600 hover:text-blue-500 font-medium"
+                  >
+                    Sign in
+                  </button>
+                </p>
+              )}
+            </div>
           </form>
-
-          {/* Mode Switcher */}
-          <div className="mt-6 text-center">
-            {mode === 'login' && (
-              <p className="text-gray-600 dark:text-gray-400">
-                Don't have an account?{' '}
-                <button
-                  onClick={() => setMode('signup')}
-                  className="text-purple-600 hover:text-purple-700 font-semibold"
-                >
-                  Sign up
-                </button>
-              </p>
-            )}
-            {mode === 'signup' && (
-              <p className="text-gray-600 dark:text-gray-400">
-                Already have an account?{' '}
-                <button
-                  onClick={() => setMode('login')}
-                  className="text-purple-600 hover:text-purple-700 font-semibold"
-                >
-                  Sign in
-                </button>
-              </p>
-            )}
-            {mode === 'forgot' && (
-              <p className="text-gray-600 dark:text-gray-400">
-                Remember your password?{' '}
-                <button
-                  onClick={() => setMode('login')}
-                  className="text-purple-600 hover:text-purple-700 font-semibold"
-                >
-                  Sign in
-                </button>
-              </p>
-            )}
-          </div>
-        </div>
+        </motion.div>
       </div>
-    </div>
-  )
-}
+    </AnimatePresence>
+  );
+};
 
-export default AuthModal
+export default AuthModal;

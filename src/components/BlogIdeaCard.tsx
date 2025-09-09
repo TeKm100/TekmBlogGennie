@@ -1,92 +1,113 @@
 
-import React, { useState } from 'react'
-import {Copy, Check, Zap, Crown} from 'lucide-react'
+import React from 'react';
+import { motion } from 'framer-motion';
+import {Clock, Tag, Sparkles, Crown} from 'lucide-react';
+import { BlogIdea } from '../utils/aiService';
+import { useSubscription } from '../hooks/useSubscription';
 
 interface BlogIdeaCardProps {
-  idea: {
-    title: string
-    outline: string[]
-  }
-  showPremiumFeatures?: boolean
-  onGenerateFullPost?: () => void
+  idea: BlogIdea;
+  onGenerateContent?: (idea: BlogIdea) => void;
+  onUpgrade?: () => void;
+  showAd?: boolean;
 }
 
 const BlogIdeaCard: React.FC<BlogIdeaCardProps> = ({ 
   idea, 
-  showPremiumFeatures = false,
-  onGenerateFullPost 
+  onGenerateContent, 
+  onUpgrade, 
+  showAd = false 
 }) => {
-  const [copied, setCopied] = useState(false)
-
-  // Defensive programming to prevent undefined errors
-  const title = idea?.title || 'Untitled Blog Idea'
-  const outline = idea?.outline || []
-
-  const handleCopy = async () => {
-    const content = `${title}\n\nOutline:\n${outline.map(point => `• ${point}`).join('\n')}`
-    
-    try {
-      await navigator.clipboard.writeText(content)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    } catch (err) {
-      console.error('Failed to copy:', err)
-    }
-  }
+  const { canGenerateFullContent } = useSubscription();
 
   return (
-    <div className="bg-white rounded-2xl shadow-lg p-6 mb-4 hover:shadow-xl transition-shadow duration-300 border border-gray-100">
-      <div className="flex justify-between items-start mb-4">
-        <h3 className="text-lg font-bold text-purple-700 pr-4 leading-tight">
-          {title}
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 border border-gray-200 dark:border-gray-700"
+    >
+      <div className="flex items-start justify-between mb-3">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white line-clamp-2">
+          {idea.title}
         </h3>
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <button
-            onClick={handleCopy}
-            className={`flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
-              copied 
-                ? 'bg-green-500 text-white' 
-                : 'bg-purple-500 hover:bg-purple-600 text-white'
-            }`}
-          >
-            {copied ? <Check size={16} /> : <Copy size={16} />}
-            {copied ? 'Copied!' : 'Copy'}
-          </button>
-          
-          {showPremiumFeatures && onGenerateFullPost && (
-            <button
-              onClick={onGenerateFullPost}
-              className="flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-medium bg-gradient-to-r from-yellow-500 to-orange-500 text-white hover:from-yellow-600 hover:to-orange-600 transition-all duration-200"
-            >
-              <Zap size={16} />
-              Generate Post
-            </button>
-          )}
+        <div className="flex items-center text-sm text-gray-500 dark:text-gray-400 ml-2">
+          <Clock className="w-4 h-4 mr-1" />
+          {idea.estimatedReadTime}m
         </div>
       </div>
-      
-      <div className="space-y-2">
-        <p className="text-sm font-medium text-gray-600 mb-2">Outline:</p>
-        {outline.map((point, index) => (
-          <div key={index} className="flex items-start gap-2">
-            <span className="text-purple-500 mt-1 text-sm">•</span>
-            <p className="text-gray-700 text-sm leading-relaxed">{point}</p>
+
+      <p className="text-gray-600 dark:text-gray-400 mb-4 line-clamp-3">
+        {idea.description}
+      </p>
+
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center space-x-2">
+          <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 text-xs rounded-full">
+            {idea.category}
+          </span>
+          <div className="flex items-center space-x-1">
+            {idea.tags.slice(0, 2).map((tag, index) => (
+              <span
+                key={index}
+                className="flex items-center text-xs text-gray-500 dark:text-gray-400"
+              >
+                <Tag className="w-3 h-3 mr-1" />
+                {tag}
+              </span>
+            ))}
           </div>
-        ))}
+        </div>
       </div>
 
-      {!showPremiumFeatures && (
-        <div className="mt-4 p-3 bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg border border-purple-200">
-          <div className="flex items-center gap-2 text-purple-700">
-            <Crown size={16} />
-            <span className="text-sm font-medium">
-              Upgrade to Premium to generate full blog posts from this idea
+      {canGenerateFullContent() ? (
+        <motion.button
+          onClick={() => onGenerateContent?.(idea)}
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
+          className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-md font-medium transition-colors flex items-center justify-center space-x-2"
+        >
+          <Sparkles className="w-4 h-4" />
+          <span>Generate Full Content</span>
+        </motion.button>
+      ) : (
+        <motion.button
+          onClick={onUpgrade}
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
+          className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white py-2 px-4 rounded-md font-medium transition-colors flex items-center justify-center space-x-2"
+        >
+          <Crown className="w-4 h-4" />
+          <span>Upgrade for Full Content</span>
+        </motion.button>
+      )}
+
+      {/* AdSense Ad Block for Free Users */}
+      {showAd && !canGenerateFullContent() && (
+        <div className="mt-4 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+          <div className="text-xs text-gray-500 dark:text-gray-400 mb-2 text-center">
+            Advertisement
+          </div>
+          {/* TODO: Replace with your actual AdSense code */}
+          <div className="w-full h-32 bg-gray-200 dark:bg-gray-600 rounded flex items-center justify-center">
+            {/* 
+            <ins className="adsbygoogle"
+                 style={{ display: 'block' }}
+                 data-ad-client="ca-pub-XXXXXXXXXXXXXXXXX"
+                 data-ad-slot="XXXXXXXXXX"
+                 data-ad-format="rectangle"
+                 data-full-width-responsive="true"></ins>
+            */}
+            <span className="text-gray-500 dark:text-gray-400 text-sm">
+              Ad Space (300x250)
             </span>
           </div>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 text-center">
+            Upgrade to remove ads and unlock premium features
+          </p>
         </div>
       )}
-    </div>
-  )
-}
+    </motion.div>
+  );
+};
 
-export default BlogIdeaCard
+export default BlogIdeaCard;

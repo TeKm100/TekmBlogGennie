@@ -1,205 +1,156 @@
 
-import React, { useState, useEffect } from 'react'
-import {Star, X, ThumbsUp} from 'lucide-react'
-import { lumi } from '../lib/lumi'
-import { useAuth } from '../hooks/useAuth'
-import toast from 'react-hot-toast'
+import React, { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import {Star, X} from 'lucide-react';
+import { useAuth } from '../hooks/useAuth';
+import toast from 'react-hot-toast';
 
-interface Rating {
-  _id: string
-  user_id: string
-  rating: number
-  feedback?: string
-  created_at: string
+interface RatingModalProps {
+  isOpen: boolean;
+  onClose: () => void;
 }
 
-const RatingModal: React.FC = () => {
-  const { user } = useAuth()
-  const [isVisible, setIsVisible] = useState(false)
-  const [rating, setRating] = useState(0)
-  const [hoverRating, setHoverRating] = useState(0)
-  const [feedback, setFeedback] = useState('')
-  const [isSubmitting, setIsSubmitting] = useState(false)
+const RatingModal: React.FC<RatingModalProps> = ({ isOpen, onClose }) => {
+  const [rating, setRating] = useState(0);
+  const [hoveredRating, setHoveredRating] = useState(0);
+  const [feedback, setFeedback] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const { user } = useAuth();
 
-  useEffect(() => {
-    const checkRatingStatus = async () => {
-      if (!user) return
-
-      try {
-        // Check if user has already rated or dismissed
-        const userPrefs = await lumi.entities.user_preferences.list({
-          filter: { user_id: user.userId }
-        })
-
-        const prefs = userPrefs[0]
-        if (!prefs?.show_rating_modal) {
-          return // Don't show modal
-        }
-
-        // Check if user has already rated
-        const existingRating = await lumi.entities.ratings.list({
-          filter: { user_id: user.userId }
-        })
-
-        if (existingRating.length === 0) {
-          // Show modal after a short delay
-          setTimeout(() => setIsVisible(true), 2000)
-        }
-      } catch (error) {
-        console.error('Error checking rating status:', error)
-      }
+  const handleSubmit = async () => {
+    if (rating === 0) {
+      toast.error('Please select a rating');
+      return;
     }
 
-    checkRatingStatus()
-  }, [user])
-
-  const handleSubmitRating = async () => {
-    if (!user || rating === 0) return
-
-    setIsSubmitting(true)
+    setSubmitting(true);
+    
     try {
-      await lumi.entities.ratings.create({
-        user_id: user.userId,
+      // Save rating to localStorage (in production, save to your backend)
+      const newRating = {
+        id: Date.now().toString(),
+        userId: user?.uid || 'anonymous',
         rating,
-        feedback: feedback.trim() || undefined,
-        created_at: new Date().toISOString()
-      })
+        feedback,
+        createdAt: new Date().toISOString()
+      };
 
-      toast.success('Thank you for your feedback!')
-      setIsVisible(false)
-    } catch (error) {
-      toast.error('Failed to submit rating')
-      console.error('Rating submission error:', error)
-    } finally {
-      setIsSubmitting(false)
-    }
-  }
+      const existingRatings = JSON.parse(localStorage.getItem('app_ratings') || '[]');
+      existingRatings.push(newRating);
+      localStorage.setItem('app_ratings', JSON.stringify(existingRatings));
 
-  const handleRemindLater = async () => {
-    // Keep show_rating_modal as true for next login
-    setIsVisible(false)
-  }
-
-  const handleDontShowAgain = async () => {
-    if (!user) return
-
-    try {
-      const userPrefs = await lumi.entities.user_preferences.list({
-        filter: { user_id: user.userId }
-      })
-
-      if (userPrefs.length > 0) {
-        await lumi.entities.user_preferences.update(userPrefs[0]._id, {
-          show_rating_modal: false
-        })
-      } else {
-        await lumi.entities.user_preferences.create({
-          user_id: user.userId,
-          show_rating_modal: false,
-          theme: 'system',
-          email_notifications: true
-        })
+      // Mark that user has rated
+      if (user) {
+        localStorage.setItem(`user_rated_${user.uid}`, 'true');
       }
 
-      setIsVisible(false)
+      toast.success('Thank you for your feedback!');
+      onClose();
     } catch (error) {
-      console.error('Error updating preferences:', error)
-      setIsVisible(false)
+      toast.error('Failed to submit rating. Please try again.');
+    } finally {
+      setSubmitting(false);
     }
-  }
+  };
 
-  if (!isVisible) return null
+  const handleDontShowAgain = () => {
+    if (user) {
+      localStorage.setItem(`dont_show_rating_${user.uid}`, 'true');
+    }
+    onClose();
+  };
+
+  if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-gray-800 rounded-2xl max-w-md w-full p-6">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-2xl font-bold text-gray-800 dark:text-white">Rate TekmBlogGenie</h2>
-          <button
-            onClick={() => setIsVisible(false)}
-            className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-          >
-            <X className="w-6 h-6" />
-          </button>
-        </div>
-
-        <div className="text-center mb-6">
-          <div className="w-16 h-16 bg-gradient-to-r from-purple-600 to-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
-            <ThumbsUp className="w-8 h-8 text-white" />
-          </div>
-          <p className="text-gray-600 dark:text-gray-300">
-            How would you rate your experience with TekmBlogGenie so far?
-          </p>
-        </div>
-
-        {/* Star Rating */}
-        <div className="flex justify-center gap-2 mb-6">
-          {[1, 2, 3, 4, 5].map((star) => (
+    <AnimatePresence>
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.9 }}
+          className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md"
+        >
+          <div className="flex justify-between items-center p-6 border-b dark:border-gray-700">
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+              Rate Our App
+            </h2>
             <button
-              key={star}
-              onClick={() => setRating(star)}
-              onMouseEnter={() => setHoverRating(star)}
-              onMouseLeave={() => setHoverRating(0)}
-              className="transition-colors"
+              onClick={onClose}
+              className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
             >
-              <Star
-                className={`w-8 h-8 ${
-                  star <= (hoverRating || rating)
-                    ? 'text-yellow-400 fill-current'
-                    : 'text-gray-300 dark:text-gray-600'
-                }`}
+              <X className="w-5 h-5 text-gray-500" />
+            </button>
+          </div>
+
+          <div className="p-6">
+            <p className="text-gray-600 dark:text-gray-400 mb-6 text-center">
+              How would you rate your experience with BlogGen AI?
+            </p>
+
+            {/* Star Rating */}
+            <div className="flex justify-center mb-6">
+              {[1, 2, 3, 4, 5].map((star) => (
+                <motion.button
+                  key={star}
+                  onClick={() => setRating(star)}
+                  onMouseEnter={() => setHoveredRating(star)}
+                  onMouseLeave={() => setHoveredRating(0)}
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.9 }}
+                  className="p-1"
+                >
+                  <Star
+                    className={`w-8 h-8 ${
+                      star <= (hoveredRating || rating)
+                        ? 'text-yellow-400 fill-current'
+                        : 'text-gray-300 dark:text-gray-600'
+                    }`}
+                  />
+                </motion.button>
+              ))}
+            </div>
+
+            {/* Feedback Text */}
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Additional Feedback (Optional)
+              </label>
+              <textarea
+                value={feedback}
+                onChange={(e) => setFeedback(e.target.value)}
+                rows={3}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white resize-none"
+                placeholder="Tell us what you think..."
               />
-            </button>
-          ))}
-        </div>
+            </div>
 
-        {/* Feedback */}
-        {rating > 0 && (
-          <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Tell us more (optional)
-            </label>
-            <textarea
-              value={feedback}
-              onChange={(e) => setFeedback(e.target.value)}
-              placeholder="What do you like most about TekmBlogGenie?"
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent dark:bg-gray-700 dark:text-white resize-none"
-              rows={3}
-              maxLength={500}
-            />
+            {/* Action Buttons */}
+            <div className="flex space-x-3">
+              <motion.button
+                onClick={handleSubmit}
+                disabled={submitting}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white py-2 px-4 rounded-md font-medium transition-colors"
+              >
+                {submitting ? 'Submitting...' : 'Submit Rating'}
+              </motion.button>
+              
+              <motion.button
+                onClick={handleDontShowAgain}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                className="flex-1 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 text-gray-800 dark:text-gray-200 py-2 px-4 rounded-md font-medium transition-colors"
+              >
+                Don't Show Again
+              </motion.button>
+            </div>
           </div>
-        )}
-
-        {/* Action Buttons */}
-        <div className="space-y-3">
-          {rating > 0 && (
-            <button
-              onClick={handleSubmitRating}
-              disabled={isSubmitting}
-              className="w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white py-3 rounded-lg font-semibold hover:from-purple-700 hover:to-blue-700 transition-all duration-200 disabled:opacity-50"
-            >
-              {isSubmitting ? 'Submitting...' : 'Submit Rating'}
-            </button>
-          )}
-          
-          <div className="flex gap-3">
-            <button
-              onClick={handleRemindLater}
-              className="flex-1 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-            >
-              Remind me later
-            </button>
-            <button
-              onClick={handleDontShowAgain}
-              className="flex-1 text-gray-500 dark:text-gray-400 py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-            >
-              Don't show again
-            </button>
-          </div>
-        </div>
+        </motion.div>
       </div>
-    </div>
-  )
-}
+    </AnimatePresence>
+  );
+};
 
-export default RatingModal
+export default RatingModal;

@@ -1,49 +1,113 @@
 
-import { useState, useEffect } from 'react'
-import { lumi } from '../lib/lumi'
+import { useState, useEffect } from 'react';
+import { 
+  User,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut,
+  onAuthStateChanged,
+  sendPasswordResetEmail,
+  updateProfile
+} from 'firebase/auth';
+import { auth } from '../lib/firebase';
 
-interface User {
-  userId: string
-  email: string
-  userName: string
-  createdTime: string
+export interface UserData {
+  uid: string;
+  email: string;
+  displayName: string;
+  country: string;
 }
 
-export function useAuth() {
-  const [isAuthenticated, setIsAuthenticated] = useState(lumi.auth.isAuthenticated)
-  const [user, setUser] = useState<User | null>(lumi.auth.user)
-  const [loading, setLoading] = useState(true)
+export const useAuth = () => {
+  const [user, setUser] = useState<User | null>(null);
+  const [userData, setUserData] = useState<UserData | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = lumi.auth.onAuthChange(({ isAuthenticated, user }) => {
-      setIsAuthenticated(isAuthenticated)
-      setUser(user)
-      setLoading(false)
-    })
-    
-    setLoading(false)
-    return unsubscribe
-  }, [])
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setUser(user);
+      if (user) {
+        // Get additional user data from localStorage or Firestore
+        const storedUserData = localStorage.getItem(`userData_${user.uid}`);
+        if (storedUserData) {
+          setUserData(JSON.parse(storedUserData));
+        } else {
+          setUserData({
+            uid: user.uid,
+            email: user.email || '',
+            displayName: user.displayName || '',
+            country: ''
+          });
+        }
+      } else {
+        setUserData(null);
+      }
+      setLoading(false);
+    });
 
-  const signIn = async () => {
+    return () => unsubscribe();
+  }, []);
+
+  const signup = async (email: string, password: string, fullName: string, country: string) => {
     try {
-      const { user } = await lumi.auth.signIn()
-      return user
+      const result = await createUserWithEmailAndPassword(auth, email, password);
+      await updateProfile(result.user, { displayName: fullName });
+      
+      const newUserData: UserData = {
+        uid: result.user.uid,
+        email,
+        displayName: fullName,
+        country
+      };
+      
+      // Store additional user data
+      localStorage.setItem(`userData_${result.user.uid}`, JSON.stringify(newUserData));
+      setUserData(newUserData);
+      
+      return result.user;
     } catch (error) {
-      console.error('Sign in failed:', error)
-      throw error
+      throw error;
     }
-  }
+  };
 
-  const signOut = () => {
-    lumi.auth.signOut()
-  }
+  const login = async (email: string, password: string, rememberMe: boolean = false) => {
+    try {
+      const result = await signInWithEmailAndPassword(auth, email, password);
+      
+      if (rememberMe) {
+        localStorage.setItem('rememberMe', 'true');
+      }
+      
+      return result.user;
+    } catch (error) {
+      throw error;
+    }
+  };
 
-  return { 
-    user, 
-    isAuthenticated, 
-    loading, 
-    signIn, 
-    signOut 
-  }
-}
+  const logout = async () => {
+    try {
+      await signOut(auth);
+      localStorage.removeItem('rememberMe');
+    } catch (error) {
+      throw error;
+    }
+  };
+
+  const resetPassword = async (email: string) => {
+    try {
+      await sendPasswordResetEmail(auth, email);
+    } catch (error) {
+      throw error;
+    }
+  };
+
+  return {
+    user,
+    userData,
+    loading,
+    signup,
+    login,
+    logout,
+    resetPassword
+  };
+};

@@ -1,114 +1,88 @@
+// ✅ Only keep public key here
+const PAYSTACK_PUBLIC_KEY = "pk_test_d64192e86cdbcbe81646360ab2e09ceb8e061060"; 
 
-interface PaystackConfig {
-  publicKey: string
-  currency: string
-  amount: number
-  email: string
-  reference: string
-  callback: (response: any) => void
-  onClose: () => void
+export interface PaystackConfig {
+  email: string;
+  amount: number; // in kobo for NGN, cents for USD, etc.
+  currency: string;
+  plan?: string;
+  callback: (response: any) => void;
+  onClose: () => void;
 }
 
-// Currency mapping based on country/region
-const getCurrencyByLocation = (): string => {
-  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
-  const locale = navigator.language || 'en-US'
-  
-  // Nigeria
-  if (timezone.includes('Lagos') || locale.includes('ng')) return 'NGN'
-  // Ghana
-  if (timezone.includes('Accra') || locale.includes('gh')) return 'GHS'
-  // Kenya
-  if (timezone.includes('Nairobi') || locale.includes('ke')) return 'KES'
-  // South Africa
-  if (timezone.includes('Johannesburg') || locale.includes('za')) return 'ZAR'
-  
-  // Default to USD for other regions
-  return 'USD'
-}
+// Currency conversion based on country
+export const getCurrencyByCountry = (country: string): string => {
+  const currencyMap: { [key: string]: string } = {
+    Nigeria: "NGN",
+    Ghana: "GHS",
+    Kenya: "KES",
+    "South Africa": "ZAR",
+    "United States": "USD",
+    "United Kingdom": "GBP",
+    Canada: "CAD",
+    // Add more countries if needed
+  };
+  return currencyMap[country] || "USD";
+};
 
-// Convert USD prices to local currency (approximate rates)
-const convertCurrency = (usdAmount: number, targetCurrency: string): number => {
-  const rates: Record<string, number> = {
-    'USD': 1,
-    'NGN': 1650, // 1 USD = ~1650 NGN
-    'GHS': 16,   // 1 USD = ~16 GHS
-    'KES': 130,  // 1 USD = ~130 KES
-    'ZAR': 18    // 1 USD = ~18 ZAR
-  }
-  
-  return Math.round(usdAmount * (rates[targetCurrency] || 1))
-}
+// Convert USD prices to local currency (simplified conversion)
+export const convertPrice = (usdPrice: number, currency: string): number => {
+  const conversionRates: { [key: string]: number } = {
+    NGN: 800, // 1 USD = 800 NGN (update with real rates)
+    GHS: 12,  // 1 USD = 12 GHS
+    KES: 150, // 1 USD = 150 KES
+    ZAR: 18,  // 1 USD = 18 ZAR
+    USD: 1,
+    GBP: 0.8,
+    CAD: 1.35,
+  };
+  return Math.round(usdPrice * (conversionRates[currency] || 1));
+};
 
-export const initializePaystack = (config: Omit<PaystackConfig, 'publicKey'>) => {
-  // In a real app, store this in environment variables
-  const publicKey = 'pk_test_your_paystack_public_key_here'
-  
-  const currency = getCurrencyByLocation()
-  const convertedAmount = convertCurrency(config.amount, currency)
-  
-  // Load Paystack script if not already loaded
-  if (!window.PaystackPop) {
-    const script = document.createElement('script')
-    script.src = 'https://js.paystack.co/v1/inline.js'
+// Initialize Paystack
+export const initializePaystack = (config: PaystackConfig) => {
+  if (!(window as any).PaystackPop) {
+    const script = document.createElement("script");
+    script.src = "https://js.paystack.co/v1/inline.js";
     script.onload = () => {
-      openPaystackPopup({
-        ...config,
-        publicKey,
-        currency,
-        amount: convertedAmount * 100 // Paystack expects amount in kobo/cents
-      })
-    }
-    document.head.appendChild(script)
+      openPaystackModal(config);
+    };
+    document.head.appendChild(script);
   } else {
-    openPaystackPopup({
-      ...config,
-      publicKey,
-      currency,
-      amount: convertedAmount * 100
-    })
+    openPaystackModal(config);
   }
-}
+};
 
-const openPaystackPopup = (config: PaystackConfig) => {
-  const handler = window.PaystackPop.setup({
-    key: config.publicKey,
+// Open Paystack payment modal
+const openPaystackModal = (config: PaystackConfig) => {
+  const handler = (window as any).PaystackPop.setup({
+    key: PAYSTACK_PUBLIC_KEY,
     email: config.email,
     amount: config.amount,
     currency: config.currency,
-    ref: config.reference,
-    callback: config.callback,
-    onClose: config.onClose
-  })
-  
-  handler.openIframe()
-}
+    callback: (response: any) => {
+      console.log("Payment successful:", response);
+      config.callback(response);
+    },
+    onClose: () => {
+      console.log("Payment modal closed");
+      config.onClose();
+    },
+  });
+  handler.openIframe();
+};
 
-export const generatePaymentReference = (): string => {
-  return `ps_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-}
-
-// Format currency for display
-export const formatCurrency = (amount: number, currency?: string): string => {
-  const detectedCurrency = currency || getCurrencyByLocation()
-  const convertedAmount = convertCurrency(amount, detectedCurrency)
-  
-  const formatter = new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: detectedCurrency,
-    minimumFractionDigits: detectedCurrency === 'NGN' ? 0 : 2
-  })
-  
-  return formatter.format(convertedAmount)
-}
-
-// Declare global PaystackPop for TypeScript
-declare global {
-  interface Window {
-    PaystackPop: {
-      setup: (config: any) => {
-        openIframe: () => void
-      }
-    }
-  }
-}
+// Create subscription plan (mock for now — backend needed)
+export const createSubscriptionPlan = async (planData: {
+  name: string;
+  amount: number;
+  interval: "monthly" | "annually";
+  currency: string;
+}) => {
+  /**
+   * ⚠️ IMPORTANT: This should be implemented on your backend
+   * with PAYSTACK_SECRET_KEY for security.
+   */
+  console.log("Create plan on your backend:", planData);
+  return { plan_code: `PLN_${Date.now()}` }; // Mock response
+};

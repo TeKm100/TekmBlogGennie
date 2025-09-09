@@ -1,83 +1,75 @@
 
+// Free AI Service - Generates blog ideas only
 export interface BlogIdea {
+  id: string;
   title: string;
-  outline: string[];
+  description: string;
+  category: string;
+  tags: string[];
+  estimatedReadTime: number;
 }
 
-// Simulated AI service - replace with actual AI API call
-export const generateBlogIdeas = async (topic: string): Promise<BlogIdea[]> => {
-  // Simulate API delay
-  await new Promise(resolve => setTimeout(resolve, 2000));
-  
-  // Mock AI-generated blog ideas based on the topic
-  const ideas: BlogIdea[] = [
-    {
-      title: `The Ultimate Beginner's Guide to ${topic}`,
-      outline: [
-        `What is ${topic} and why should you care?`,
-        'Essential tools and resources to get started',
-        'Common mistakes to avoid as a beginner'
-      ]
-    },
-    {
-      title: `10 Expert Tips for Mastering ${topic}`,
-      outline: [
-        'Advanced techniques from industry professionals',
-        'Time-saving strategies that actually work',
-        'How to measure your progress and success'
-      ]
-    },
-    {
-      title: `${topic}: Myths vs Reality - What You Need to Know`,
-      outline: [
-        'Debunking the most common misconceptions',
-        'Evidence-based facts that might surprise you',
-        'Making informed decisions in your journey'
-      ]
-    },
-    {
-      title: `Building a Sustainable ${topic} Routine That Sticks`,
-      outline: [
-        'Creating habits that last beyond motivation',
-        'Overcoming obstacles and staying consistent',
-        'Tracking progress and celebrating small wins'
-      ]
-    },
-    {
-      title: `The Future of ${topic}: Trends and Predictions`,
-      outline: [
-        'Emerging technologies and innovations',
-        'What experts predict for the next 5 years',
-        'How to prepare and stay ahead of the curve'
-      ]
-    },
-    {
-      title: `${topic} on a Budget: Maximum Results, Minimum Investment`,
-      outline: [
-        'Free and low-cost alternatives that work',
-        'DIY solutions and creative workarounds',
-        'When it\'s worth investing more money'
-      ]
-    },
-    {
-      title: `Case Study: How I Transformed My Life with ${topic}`,
-      outline: [
-        'My personal journey and initial struggles',
-        'The breakthrough moment that changed everything',
-        'Lessons learned and advice for others'
-      ]
-    },
-    {
-      title: `${topic} Mistakes That Are Costing You Time and Money`,
-      outline: [
-        'The most expensive errors people make',
-        'Warning signs you\'re on the wrong track',
-        'Quick fixes to get back on course'
-      ]
-    }
-  ];
+// Mock blog ideas for free users
+const mockBlogIdeas: BlogIdea[] = [
+  {
+    id: '1',
+    title: '10 Essential Tips for Remote Work Productivity',
+    description: 'Discover proven strategies to stay productive while working from home.',
+    category: 'Productivity',
+    tags: ['remote work', 'productivity', 'tips'],
+    estimatedReadTime: 5
+  },
+  {
+    id: '2',
+    title: 'The Future of Artificial Intelligence in 2024',
+    description: 'Explore the latest trends and predictions for AI technology.',
+    category: 'Technology',
+    tags: ['AI', 'technology', 'future'],
+    estimatedReadTime: 8
+  },
+  {
+    id: '3',
+    title: 'Sustainable Living: Small Changes, Big Impact',
+    description: 'Learn simple ways to make your lifestyle more environmentally friendly.',
+    category: 'Lifestyle',
+    tags: ['sustainability', 'environment', 'lifestyle'],
+    estimatedReadTime: 6
+  },
+  {
+    id: '4',
+    title: 'Digital Marketing Strategies for Small Businesses',
+    description: 'Effective marketing tactics that won\'t break the bank.',
+    category: 'Business',
+    tags: ['marketing', 'small business', 'digital'],
+    estimatedReadTime: 7
+  },
+  {
+    id: '5',
+    title: 'Mental Health in the Digital Age',
+    description: 'Understanding and managing mental wellness in our connected world.',
+    category: 'Health',
+    tags: ['mental health', 'digital wellness', 'self-care'],
+    estimatedReadTime: 9
+  }
+];
 
-  // Return 5-8 random ideas
-  const shuffled = ideas.sort(() => 0.5 - Math.random());
-  return shuffled.slice(0, Math.floor(Math.random() * 4) + 5);
+export const generateBlogIdeas = async (topic: string, count: number = 3): Promise<BlogIdea[]> => {
+  // Simulate API delay
+  await new Promise(resolve => setTimeout(resolve, 1500));
+  
+  // Filter and return relevant ideas based on topic
+  const filteredIdeas = mockBlogIdeas.filter(idea => 
+    idea.title.toLowerCase().includes(topic.toLowerCase()) ||
+    idea.description.toLowerCase().includes(topic.toLowerCase()) ||
+    idea.category.toLowerCase().includes(topic.toLowerCase()) ||
+    idea.tags.some(tag => tag.toLowerCase().includes(topic.toLowerCase()))
+  );
+  
+  // If no matches, return random ideas
+  const ideasToReturn = filteredIdeas.length > 0 ? filteredIdeas : mockBlogIdeas;
+  
+  return ideasToReturn.slice(0, count).map(idea => ({
+    ...idea,
+    id: `${idea.id}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+  }));
 };

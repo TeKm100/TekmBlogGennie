@@ -1,387 +1,316 @@
 
-import React, { useState } from 'react'
-import { useAuth } from '../hooks/useAuth'
-import { useSubscription } from '../hooks/useSubscription'
-import { initializePaystack, generatePaymentReference, formatCurrency } from '../utils/paystack'
-import { Link } from 'react-router-dom'
-import {Crown, Check, X, Zap, ArrowLeft, Sparkles, Edit3, Download, BarChart3, Headphones, Globe, Star} from 'lucide-react'
-import ThemeToggle from '../components/ThemeToggle'
-import LoadingSpinner from '../components/LoadingSpinner'
-import toast from 'react-hot-toast'
+import React, { useState } from 'react';
+import { motion } from 'framer-motion';
+import {Check, Crown, Sparkles, Zap, Star} from 'lucide-react';
+import { useAuth } from '../hooks/useAuth';
+import { useSubscription } from '../hooks/useSubscription';
+import { initializePaystack, getCurrencyByCountry, convertPrice } from '../utils/paystack';
+import LoadingSpinner from '../components/LoadingSpinner';
+import toast from 'react-hot-toast';
 
 const Upgrade: React.FC = () => {
-  const { user } = useAuth()
-  const { subscription, isPremium, createSubscription } = useSubscription()
-  const [loading, setLoading] = useState<string | null>(null)
+  const [loading, setLoading] = useState<string | null>(null);
+  const [billingCycle, setBillingCycle] = useState<'monthly' | 'annually'>('monthly');
+  
+  const { user, userData } = useAuth();
+  const { updateSubscription } = useSubscription();
 
-  const features = [
-    {
-      name: 'Blog Ideas Generation',
-      free: '5 per day',
-      premium: 'Unlimited',
-      icon: <Sparkles className="w-5 h-5" />
-    },
-    {
-      name: 'Full Blog Post Generation',
-      free: false,
-      premium: true,
-      icon: <Edit3 className="w-5 h-5" />
-    },
-    {
-      name: 'Advanced Editing Tools',
-      free: false,
-      premium: true,
-      icon: <Edit3 className="w-5 h-5" />
-    },
-    {
-      name: 'SEO Optimization',
-      free: false,
-      premium: true,
-      icon: <BarChart3 className="w-5 h-5" />
-    },
-    {
-      name: 'Export Formats',
-      free: 'Text only',
-      premium: 'PDF, Word, HTML',
-      icon: <Download className="w-5 h-5" />
-    },
-    {
-      name: 'Writing Styles',
-      free: 'Basic',
-      premium: '10+ Styles',
-      icon: <Globe className="w-5 h-5" />
-    },
-    {
-      name: 'Priority Support',
-      free: false,
-      premium: true,
-      icon: <Headphones className="w-5 h-5" />
-    },
-    {
-      name: 'Analytics Dashboard',
-      free: false,
-      premium: true,
-      icon: <BarChart3 className="w-5 h-5" />
-    }
-  ]
+  const currency = userData?.country ? getCurrencyByCountry(userData.country) : 'USD';
 
   const plans = [
     {
-      name: 'Monthly',
-      price: 5,
-      period: 'month',
-      description: 'Perfect for regular content creators',
+      id: 'starter',
+      name: 'Starter',
+      description: 'Perfect for getting started with AI content creation',
+      monthlyPrice: 5,
+      yearlyPrice: 50,
+      features: [
+        'Everything in Free',
+        'Full blog content generation',
+        'Content editing tools',
+        'Export in multiple formats',
+        'Email support',
+        'No ads'
+      ],
       popular: true,
-      savings: null
+      color: 'from-blue-500 to-purple-600'
     },
     {
-      name: 'Yearly',
-      price: 50,
-      originalPrice: 60,
-      period: 'year',
-      description: 'Best value for serious bloggers',
+      id: 'pro',
+      name: 'Pro',
+      description: 'For serious content creators and businesses',
+      monthlyPrice: 10,
+      yearlyPrice: 100,
+      features: [
+        'Everything in Starter',
+        'Unlimited blog ideas',
+        'AI content rewriting',
+        'Advanced editing tools',
+        'Priority support',
+        'Analytics dashboard',
+        'Team collaboration'
+      ],
       popular: false,
-      savings: '2 months free'
+      color: 'from-purple-500 to-pink-600'
     }
-  ]
+  ];
 
-  const handleSubscribe = async (planType: 'monthly' | 'yearly', amount: number) => {
-    if (!user) {
-      toast.error('Please sign in to subscribe')
-      return
+  const handleSubscribe = async (planId: string) => {
+    if (!user || !userData?.email) {
+      toast.error('Please log in to subscribe');
+      return;
     }
 
-    setLoading(planType)
-    const reference = generatePaymentReference()
+    const plan = plans.find(p => p.id === planId);
+    if (!plan) return;
+
+    setLoading(planId);
 
     try {
+      const basePrice = billingCycle === 'monthly' ? plan.monthlyPrice : plan.yearlyPrice;
+      const localPrice = convertPrice(basePrice, currency);
+      const amountInCents = localPrice * (currency === 'NGN' ? 1 : 100); // Paystack expects kobo for NGN, cents for others
+
       initializePaystack({
-        email: user.email,
-        amount,
-        reference,
-        callback: async (response) => {
-          if (response.status === 'success') {
-            try {
-              await createSubscription(planType, response.reference, amount)
-              toast.success('Subscription activated successfully!')
-            } catch (error) {
-              toast.error('Failed to activate subscription')
-            }
-          }
-          setLoading(null)
+        email: userData.email,
+        amount: amountInCents,
+        currency: currency,
+        callback: (response) => {
+          console.log('Payment successful:', response);
+          
+          // Update subscription status
+          updateSubscription({
+            plan: planId as 'starter' | 'pro',
+            status: 'active',
+            expiresAt: new Date(Date.now() + (billingCycle === 'monthly' ? 30 : 365) * 24 * 60 * 60 * 1000).toISOString(),
+            paymentMethod: 'Paystack'
+          });
+          
+          toast.success(`Successfully subscribed to ${plan.name} plan!`);
+          setLoading(null);
         },
         onClose: () => {
-          setLoading(null)
+          console.log('Payment modal closed');
+          setLoading(null);
         }
-      })
+      });
     } catch (error) {
-      toast.error('Failed to initialize payment')
-      setLoading(null)
+      console.error('Payment error:', error);
+      toast.error('Payment failed. Please try again.');
+      setLoading(null);
     }
-  }
+  };
 
-  if (isPremium) {
-    return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
-        {/* Header */}
-        <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
-          <div className="container mx-auto px-4 py-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <Link
-                  to="/dashboard"
-                  className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-white transition-colors"
-                >
-                  <ArrowLeft className="w-5 h-5" />
-                </Link>
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-gradient-to-r from-purple-600 to-blue-600 rounded-full flex items-center justify-center">
-                    <Sparkles className="w-6 h-6 text-white" />
-                  </div>
-                  <h1 className="text-2xl font-bold text-gray-800 dark:text-white">TekmBlogGenie</h1>
-                </div>
-              </div>
-              <ThemeToggle />
-            </div>
-          </div>
-        </header>
+  const formatPrice = (usdPrice: number) => {
+    const localPrice = convertPrice(usdPrice, currency);
+    const currencySymbols: { [key: string]: string } = {
+      'NGN': '₦',
+      'GHS': '₵',
+      'KES': 'KSh',
+      'ZAR': 'R',
+      'USD': '$',
+      'GBP': '£',
+      'CAD': 'C$'
+    };
+    
+    return `${currencySymbols[currency] || '$'}${localPrice.toLocaleString()}`;
+  };
 
-        <div className="container mx-auto px-4 py-16">
-          <div className="max-w-2xl mx-auto text-center">
-            <div className="w-20 h-20 bg-gradient-to-r from-purple-600 to-blue-600 rounded-full flex items-center justify-center mx-auto mb-6">
-              <Crown className="w-10 h-10 text-white" />
-            </div>
-            <h2 className="text-3xl font-bold text-gray-800 dark:text-white mb-4">
-              You're Already Premium! 🎉
-            </h2>
-            <p className="text-xl text-gray-600 dark:text-gray-300 mb-8">
-              Enjoy unlimited blog generation and all premium features
-            </p>
-            
-            {subscription && (
-              <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 mb-8">
-                <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">
-                  Current Subscription
-                </h3>
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <span className="text-gray-600 dark:text-gray-400">Plan:</span>
-                    <p className="font-semibold text-gray-800 dark:text-white capitalize">
-                      {subscription.plan_type}
-                    </p>
-                  </div>
-                  <div>
-                    <span className="text-gray-600 dark:text-gray-400">Status:</span>
-                    <p className="font-semibold text-green-600 capitalize">
-                      {subscription.status}
-                    </p>
-                  </div>
-                  <div>
-                    <span className="text-gray-600 dark:text-gray-400">Expires:</span>
-                    <p className="font-semibold text-gray-800 dark:text-white">
-                      {new Date(subscription.expires_at).toLocaleDateString()}
-                    </p>
-                  </div>
-                  <div>
-                    <span className="text-gray-600 dark:text-gray-400">Amount:</span>
-                    <p className="font-semibold text-gray-800 dark:text-white">
-                      {formatCurrency(subscription.amount)}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            <Link
-              to="/dashboard"
-              className="bg-gradient-to-r from-purple-600 to-blue-600 text-white px-8 py-4 rounded-xl font-semibold text-lg hover:from-purple-700 hover:to-blue-700 transition-all duration-200 inline-flex items-center gap-2"
-            >
-              <Zap className="w-5 h-5" />
-              Continue Creating
-            </Link>
-          </div>
-        </div>
-      </div>
-    )
-  }
+  const getSavings = (plan: any) => {
+    const monthlyTotal = plan.monthlyPrice * 12;
+    const savings = monthlyTotal - plan.yearlyPrice;
+    const savingsPercentage = Math.round((savings / monthlyTotal) * 100);
+    return { amount: savings, percentage: savingsPercentage };
+  };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
-      {/* Header */}
-      <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Link
-                to="/dashboard"
-                className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-white transition-colors"
-              >
-                <ArrowLeft className="w-5 h-5" />
-              </Link>
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-gradient-to-r from-purple-600 to-blue-600 rounded-full flex items-center justify-center">
-                  <Sparkles className="w-6 h-6 text-white" />
-                </div>
-                <h1 className="text-2xl font-bold text-gray-800 dark:text-white">TekmBlogGenie</h1>
-              </div>
-            </div>
-            <ThemeToggle />
-          </div>
-        </div>
-      </header>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-purple-900">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+        {/* Header */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="text-center mb-12"
+        >
+          <motion.div
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            transition={{ delay: 0.2, type: 'spring', stiffness: 200 }}
+            className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full mb-6"
+          >
+            <Crown className="w-8 h-8 text-white" />
+          </motion.div>
 
-      <div className="container mx-auto px-4 py-16">
-        <div className="max-w-6xl mx-auto">
-          {/* Hero Section */}
-          <div className="text-center mb-16">
-            <div className="flex items-center justify-center gap-2 mb-6">
-              <Crown className="w-8 h-8 text-purple-600 dark:text-purple-400" />
-              <span className="text-purple-600 dark:text-purple-400 font-semibold">Upgrade to Premium</span>
-            </div>
-            <h2 className="text-4xl md:text-5xl font-bold text-gray-800 dark:text-white mb-6">
-              Unlock the Full Power of
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-blue-600">
-                {" "}AI Content Creation
-              </span>
-            </h2>
-            <p className="text-xl text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
-              Generate unlimited blog ideas and complete blog posts with advanced editing tools
-            </p>
-          </div>
+          <h1 className="text-4xl md:text-5xl font-bold text-gray-900 dark:text-white mb-4">
+            Unlock Your Creative{' '}
+            <span className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+              Potential
+            </span>
+          </h1>
+          
+          <p className="text-xl text-gray-600 dark:text-gray-400 max-w-3xl mx-auto">
+            Choose the perfect plan to supercharge your content creation with AI-powered tools
+          </p>
+        </motion.div>
 
-          {/* Feature Comparison */}
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg overflow-hidden mb-12">
-            <div className="p-8">
-              <h3 className="text-2xl font-bold text-gray-800 dark:text-white mb-8 text-center">
-                Feature Comparison
-              </h3>
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-gray-200 dark:border-gray-700">
-                      <th className="text-left py-4 px-6 text-gray-800 dark:text-white font-semibold">Features</th>
-                      <th className="text-center py-4 px-6 text-gray-800 dark:text-white font-semibold">Free</th>
-                      <th className="text-center py-4 px-6 text-purple-600 dark:text-purple-400 font-semibold">Premium</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {features.map((feature, index) => (
-                      <tr key={index} className="border-b border-gray-100 dark:border-gray-700">
-                        <td className="py-4 px-6">
-                          <div className="flex items-center gap-3">
-                            <div className="text-purple-600 dark:text-purple-400">
-                              {feature.icon}
-                            </div>
-                            <span className="text-gray-800 dark:text-white font-medium">
-                              {feature.name}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="py-4 px-6 text-center">
-                          {typeof feature.free === 'boolean' ? (
-                            feature.free ? (
-                              <Check className="w-5 h-5 text-green-500 mx-auto" />
-                            ) : (
-                              <X className="w-5 h-5 text-red-500 mx-auto" />
-                            )
-                          ) : (
-                            <span className="text-gray-600 dark:text-gray-400">{feature.free}</span>
-                          )}
-                        </td>
-                        <td className="py-4 px-6 text-center">
-                          {typeof feature.premium === 'boolean' ? (
-                            feature.premium ? (
-                              <Check className="w-5 h-5 text-green-500 mx-auto" />
-                            ) : (
-                              <X className="w-5 h-5 text-red-500 mx-auto" />
-                            )
-                          ) : (
-                            <span className="text-purple-600 dark:text-purple-400 font-semibold">
-                              {feature.premium}
-                            </span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-
-          {/* Pricing Plans */}
-          <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
-            {plans.map((plan, index) => (
-              <div 
-                key={index}
-                className={`bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-8 relative ${
-                  plan.popular ? 'ring-2 ring-purple-600 scale-105' : ''
+        {/* Billing Toggle */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+          className="flex justify-center mb-12"
+        >
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-1 shadow-lg border border-gray-200 dark:border-gray-700">
+            <div className="flex">
+              <button
+                onClick={() => setBillingCycle('monthly')}
+                className={`px-6 py-2 rounded-md font-medium transition-colors ${
+                  billingCycle === 'monthly'
+                    ? 'bg-blue-600 text-white'
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
                 }`}
               >
+                Monthly
+              </button>
+              <button
+                onClick={() => setBillingCycle('annually')}
+                className={`px-6 py-2 rounded-md font-medium transition-colors relative ${
+                  billingCycle === 'annually'
+                    ? 'bg-blue-600 text-white'
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                }`}
+              >
+                Annually
+                <span className="absolute -top-2 -right-2 bg-green-500 text-white text-xs px-2 py-1 rounded-full">
+                  Save 17%
+                </span>
+              </button>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* Pricing Plans */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-5xl mx-auto">
+          {plans.map((plan, index) => {
+            const savings = getSavings(plan);
+            const currentPrice = billingCycle === 'monthly' ? plan.monthlyPrice : plan.yearlyPrice;
+            
+            return (
+              <motion.div
+                key={plan.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.4 + index * 0.1 }}
+                className={`relative bg-white dark:bg-gray-800 rounded-2xl shadow-xl border-2 ${
+                  plan.popular 
+                    ? 'border-blue-500 dark:border-blue-400' 
+                    : 'border-gray-200 dark:border-gray-700'
+                } overflow-hidden`}
+              >
                 {plan.popular && (
-                  <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
-                    <span className="bg-gradient-to-r from-purple-600 to-blue-600 text-white px-4 py-1 rounded-full text-sm font-semibold flex items-center gap-1">
-                      <Star className="w-4 h-4" />
-                      Most Popular
-                    </span>
+                  <div className="absolute top-0 left-0 right-0 bg-gradient-to-r from-blue-500 to-purple-600 text-white text-center py-2 text-sm font-medium">
+                    <Star className="inline w-4 h-4 mr-1" />
+                    Most Popular
                   </div>
                 )}
 
-                <div className="text-center mb-8">
-                  <h4 className="text-2xl font-bold text-gray-800 dark:text-white mb-2">{plan.name}</h4>
-                  <p className="text-gray-600 dark:text-gray-400 mb-4">{plan.description}</p>
-                  
-                  <div className="flex items-center justify-center gap-2 mb-2">
-                    <span className="text-4xl font-bold text-gray-800 dark:text-white">
-                      {formatCurrency(plan.price)}
-                    </span>
-                    <span className="text-gray-500 dark:text-gray-400">/{plan.period}</span>
+                <div className={`p-8 ${plan.popular ? 'pt-16' : ''}`}>
+                  {/* Plan Header */}
+                  <div className="text-center mb-8">
+                    <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+                      {plan.name}
+                    </h3>
+                    <p className="text-gray-600 dark:text-gray-400 mb-6">
+                      {plan.description}
+                    </p>
+                    
+                    <div className="mb-4">
+                      <span className="text-4xl font-bold text-gray-900 dark:text-white">
+                        {formatPrice(currentPrice)}
+                      </span>
+                      <span className="text-gray-600 dark:text-gray-400 ml-1">
+                        /{billingCycle === 'monthly' ? 'month' : 'year'}
+                      </span>
+                    </div>
+
+                    {billingCycle === 'annually' && (
+                      <div className="text-sm text-green-600 dark:text-green-400 font-medium">
+                        Save {formatPrice(savings.amount)} ({savings.percentage}%) per year
+                      </div>
+                    )}
                   </div>
-                  
-                  {plan.originalPrice && (
-                    <div className="flex items-center justify-center gap-2">
-                      <span className="text-gray-500 dark:text-gray-400 line-through">
-                        {formatCurrency(plan.originalPrice)}
-                      </span>
-                      <span className="bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 px-2 py-1 rounded-full text-sm font-semibold">
-                        {plan.savings}
-                      </span>
-                    </div>
-                  )}
+
+                  {/* Features */}
+                  <div className="space-y-4 mb-8">
+                    {plan.features.map((feature, featureIndex) => (
+                      <div key={featureIndex} className="flex items-center space-x-3">
+                        <Check className="w-5 h-5 text-green-500 flex-shrink-0" />
+                        <span className="text-gray-700 dark:text-gray-300">{feature}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Subscribe Button */}
+                  <motion.button
+                    onClick={() => handleSubscribe(plan.id)}
+                    disabled={loading === plan.id}
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    className={`w-full py-3 px-6 rounded-lg font-semibold transition-colors ${
+                      plan.popular
+                        ? 'bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white'
+                        : 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-gray-100'
+                    } disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2`}
+                  >
+                    {loading === plan.id ? (
+                      <LoadingSpinner size="sm" />
+                    ) : (
+                      <>
+                        <Sparkles className="w-5 h-5" />
+                        <span>Get Started</span>
+                      </>
+                    )}
+                  </motion.button>
                 </div>
+              </motion.div>
+            );
+          })}
+        </div>
 
-                <button
-                  onClick={() => handleSubscribe(plan.name.toLowerCase() as 'monthly' | 'yearly', plan.price)}
-                  disabled={loading === plan.name.toLowerCase()}
-                  className={`w-full py-4 rounded-xl font-semibold text-lg transition-all duration-200 disabled:opacity-50 ${
-                    plan.popular
-                      ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-700 hover:to-blue-700'
-                      : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white hover:bg-gray-200 dark:hover:bg-gray-600'
-                  }`}
-                >
-                  {loading === plan.name.toLowerCase() ? (
-                    <div className="flex items-center justify-center gap-2">
-                      <LoadingSpinner />
-                      Processing...
-                    </div>
-                  ) : (
-                    `Subscribe ${plan.name}`
-                  )}
-                </button>
+        {/* FAQ or Additional Info */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.7 }}
+          className="text-center mt-16"
+        >
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8 max-w-3xl mx-auto">
+            <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+              Why Upgrade?
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm text-gray-600 dark:text-gray-400">
+              <div className="flex items-center space-x-2">
+                <Zap className="w-5 h-5 text-yellow-500" />
+                <span>Instant AI content generation</span>
               </div>
-            ))}
-          </div>
-
-          {/* Security Notice */}
-          <div className="text-center mt-12">
-            <p className="text-gray-600 dark:text-gray-400">
-              🔒 Secure payment powered by Paystack • Cancel anytime • 30-day money-back guarantee
+              <div className="flex items-center space-x-2">
+                <Crown className="w-5 h-5 text-purple-500" />
+                <span>Premium features & tools</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Star className="w-5 h-5 text-blue-500" />
+                <span>Priority customer support</span>
+              </div>
+            </div>
+            
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-6">
+              Secure payments powered by Paystack. Cancel anytime. Prices in {currency}.
             </p>
           </div>
-        </div>
+        </motion.div>
       </div>
     </div>
-  )
-}
+  );
+};
 
-export default Upgrade
+export default Upgrade;

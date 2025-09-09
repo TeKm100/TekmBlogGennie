@@ -1,109 +1,67 @@
 
-import { useState, useEffect } from 'react'
-import { useAuth } from './useAuth'
-import { lumi } from '../lib/lumi'
-import toast from 'react-hot-toast'
+import { useState, useEffect } from 'react';
+import { useAuth } from './useAuth';
 
-interface Subscription {
-  _id: string
-  user_id: string
-  plan_type: 'free' | 'monthly' | 'yearly'
-  status: 'active' | 'expired' | 'cancelled' | 'pending'
-  expires_at: string
-  amount: number
-  currency: string
+export type SubscriptionPlan = 'free' | 'starter' | 'pro';
+
+export interface Subscription {
+  plan: SubscriptionPlan;
+  status: 'active' | 'expired' | 'cancelled';
+  expiresAt?: string;
+  paymentMethod?: string;
 }
 
-export function useSubscription() {
-  const { user, isAuthenticated } = useAuth()
-  const [subscription, setSubscription] = useState<Subscription | null>(null)
-  const [loading, setLoading] = useState(true)
-
-  const fetchSubscription = async () => {
-    if (!isAuthenticated || !user) {
-      setLoading(false)
-      return
-    }
-
-    try {
-      setLoading(true)
-      const { list: subscriptions } = await lumi.entities.subscriptions.list({
-        filter: { user_id: user.userId },
-        sort: { created_at: -1 }
-      })
-
-      if (subscriptions && subscriptions.length > 0) {
-        setSubscription(subscriptions[0])
-      } else {
-        // Create default free subscription
-        const freeSubscription = await lumi.entities.subscriptions.create({
-          user_id: user.userId,
-          plan_type: 'free',
-          status: 'active',
-          payment_reference: '',
-          amount: 0,
-          currency: 'USD',
-          auto_renew: false,
-          created_at: new Date().toISOString(),
-          expires_at: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000 * 5).toISOString(), // 5 years
-          updated_at: new Date().toISOString()
-        })
-        setSubscription(freeSubscription)
-      }
-    } catch (error) {
-      console.error('Failed to fetch subscription:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const isPremium = () => {
-    if (!subscription) return false
-    return subscription.plan_type !== 'free' && 
-           subscription.status === 'active' && 
-           new Date(subscription.expires_at) > new Date()
-  }
-
-  const createSubscription = async (planType: 'monthly' | 'yearly', paymentReference: string, amount: number) => {
-    if (!user) throw new Error('User not authenticated')
-
-    try {
-      const expiresAt = planType === 'monthly' 
-        ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
-        : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000)
-
-      const newSubscription = await lumi.entities.subscriptions.create({
-        user_id: user.userId,
-        plan_type: planType,
-        status: 'active',
-        payment_reference: paymentReference,
-        amount,
-        currency: 'USD',
-        auto_renew: true,
-        created_at: new Date().toISOString(),
-        expires_at: expiresAt.toISOString(),
-        updated_at: new Date().toISOString()
-      })
-
-      setSubscription(newSubscription)
-      toast.success('Subscription activated successfully!')
-      return newSubscription
-    } catch (error) {
-      console.error('Failed to create subscription:', error)
-      toast.error('Failed to activate subscription')
-      throw error
-    }
-  }
+export const useSubscription = () => {
+  const { user } = useAuth();
+  const [subscription, setSubscription] = useState<Subscription>({
+    plan: 'free',
+    status: 'active'
+  });
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchSubscription()
-  }, [isAuthenticated, user])
+    if (user) {
+      // Load subscription data from localStorage or your backend
+      const savedSubscription = localStorage.getItem(`subscription_${user.uid}`);
+      if (savedSubscription) {
+        setSubscription(JSON.parse(savedSubscription));
+      }
+    } else {
+      setSubscription({ plan: 'free', status: 'active' });
+    }
+    setLoading(false);
+  }, [user]);
+
+  const updateSubscription = (newSubscription: Subscription) => {
+    setSubscription(newSubscription);
+    if (user) {
+      localStorage.setItem(`subscription_${user.uid}`, JSON.stringify(newSubscription));
+    }
+  };
+
+  const isPremium = () => {
+    return subscription.plan !== 'free' && subscription.status === 'active';
+  };
+
+  const canGenerateFullContent = () => {
+    return subscription.plan === 'starter' || subscription.plan === 'pro';
+  };
+
+  const canUseAIRewriting = () => {
+    return subscription.plan === 'pro';
+  };
+
+  const hasUnlimitedIdeas = () => {
+    return subscription.plan === 'pro';
+  };
 
   return {
     subscription,
     loading,
-    isPremium: isPremium(),
-    createSubscription,
-    refetchSubscription: fetchSubscription
-  }
-}
+    updateSubscription,
+    isPremium,
+    canGenerateFullContent,
+    canUseAIRewriting,
+    hasUnlimitedIdeas
+  };
+};

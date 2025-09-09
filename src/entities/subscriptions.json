@@ -1,0 +1,63 @@
+
+{
+  "name": "subscriptions",
+  "options": {
+    "validator": {
+      "$jsonSchema": {
+        "bsonType": "object",
+        "required": ["user_id", "plan_type", "status", "created_at", "expires_at"],
+        "properties": {
+          "user_id": {
+            "bsonType": "string",
+            "description": "User ID linked to sub_project_user_account"
+          },
+          "plan_type": {
+            "bsonType": "string",
+            "enum": ["free", "monthly", "yearly"],
+            "description": "Subscription plan type"
+          },
+          "status": {
+            "bsonType": "string",
+            "enum": ["active", "expired", "cancelled", "pending"],
+            "description": "Subscription status"
+          },
+          "payment_reference": {
+            "bsonType": "string",
+            "description": "Paystack payment reference"
+          },
+          "amount": {
+            "bsonType": "number",
+            "minimum": 0,
+            "description": "Subscription amount paid"
+          },
+          "currency": {
+            "bsonType": "string",
+            "description": "Payment currency (USD, NGN, etc.)"
+          },
+          "auto_renew": {
+            "bsonType": "bool",
+            "description": "Auto renewal status"
+          },
+          "created_at": {
+            "bsonType": "string",
+            "title": "datetime",
+            "description": "Subscription creation time"
+          },
+          "expires_at": {
+            "bsonType": "string",
+            "title": "datetime",
+            "description": "Subscription expiration time"
+          },
+          "updated_at": {
+            "bsonType": "string",
+            "title": "datetime",
+            "description": "Last update time"
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "validationLevel": "moderate",
+    "validationAction": "warn"
+  }
+}

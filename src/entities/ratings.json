@@ -1,0 +1,29 @@
+
+{
+  "name": "ratings",
+  "fields": [
+    {
+      "name": "user_id",
+      "type": "string",
+      "required": true
+    },
+    {
+      "name": "rating",
+      "type": "number",
+      "required": true,
+      "min": 1,
+      "max": 5
+    },
+    {
+      "name": "feedback",
+      "type": "string",
+      "required": false
+    },
+    {
+      "name": "created_at",
+      "type": "string",
+      "title": "datetime",
+      "required": true
+    }
+  ]
+}

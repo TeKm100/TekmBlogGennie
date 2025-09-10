@@ -1,33 +1,30 @@
-
+// src/hooks/useTheme.ts
 import { useState, useEffect } from 'react';
 
 export type Theme = 'light' | 'dark';
 
 export const useTheme = () => {
   const [theme, setTheme] = useState<Theme>(() => {
-    // Check localStorage first
-    const savedTheme = localStorage.getItem('theme') as Theme;
-    if (savedTheme) {
-      return savedTheme;
+    // Get initial theme from localStorage or system preference
+    if (typeof window !== 'undefined') {
+      const savedTheme = localStorage.getItem('theme') as Theme | null;
+      if (savedTheme) return savedTheme;
+      
+      // Check system preference
+      if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        return 'dark';
+      }
     }
-    
-    // Check system preference
-    if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
-      return 'dark';
-    }
-    
     return 'light';
   });
 
   useEffect(() => {
+    // Apply theme class to document element
     const root = document.documentElement;
+    root.classList.remove('light', 'dark');
+    root.classList.add(theme);
     
-    if (theme === 'dark') {
-      root.classList.add('dark');
-    } else {
-      root.classList.remove('dark');
-    }
-    
+    // Save to localStorage
     localStorage.setItem('theme', theme);
   }, [theme]);
 
@@ -35,5 +32,10 @@ export const useTheme = () => {
     setTheme(prevTheme => prevTheme === 'light' ? 'dark' : 'light');
   };
 
-  return { theme, toggleTheme };
+  return { 
+    theme, 
+    toggleTheme,
+    isDark: theme === 'dark',
+    isLight: theme === 'light'
+  };
 };

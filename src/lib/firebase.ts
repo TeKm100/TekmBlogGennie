@@ -1,10 +1,14 @@
-import { initializeApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
-import { getAnalytics } from "firebase/analytics";
 
-// TODO: Replace this configuration with your actual Firebase project config
-// Go to Firebase Console > Project Settings > General > Your apps > Config
+// Import the functions you need from the SDKs you need
+import { initializeApp } from 'firebase/app';
+import { getAuth } from 'firebase/auth';
+import { getFirestore } from 'firebase/firestore';
+import { getAnalytics } from 'firebase/analytics';
+
+// Your web app's Firebase configuration
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+// 🔥 FIREBASE CONFIGURATION - PRODUCTION READY
+// To switch to production: Replace these values with your production Firebase config
 const firebaseConfig = {
   apiKey: "AIzaSyAw3Ux2b0DN1vi0xouyqeGfdYPQ8NBG6Rg",
   authDomain: "tekmbloggennie.firebaseapp.com",
@@ -23,6 +27,12 @@ export const auth = getAuth(app);
 
 // Initialize Cloud Firestore and get a reference to the service
 export const db = getFirestore(app);
-export const analytics = getAnalytics(app);
+
+// Initialize Analytics (optional - only in production/browser environment)
+let analytics;
+if (typeof window !== 'undefined') {
+  analytics = getAnalytics(app);
+}
+export { analytics };
 
 export default app;
